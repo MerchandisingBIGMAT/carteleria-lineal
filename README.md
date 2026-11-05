@@ -1,6 +1,6 @@
 # Generador de carteles de precio · BigMat
 
-Aplicación web para rellenar la plantilla de cartel **Precios profesionales** (A4) y descargar los carteles en PDF.
+Aplicación web para rellenar la plantilla de cartel **Precios profesionales** y descargar los carteles en PDF.
 
 ## Qué hace
 
