@@ -1,16 +1,16 @@
 # Generador de carteles de precio · BigMat
 
-Aplicación web para rellenar la plantilla de cartel **Precios profesionales** y descargar los carteles en PDF.
+Aplicación web para rellenar la plantilla de cartel **Precios profesionales** (A4) y descargar los carteles en PDF.
 
 ## Qué hace
 
-- Edita los textos del cartel: descripción, características técnicas, precio (euros y céntimos), precio por unidad y referencia.
+- Edita los textos del cartel: descripción, características técnicas, precio (euros y céntimos), unidad de medida y referencia.
 - Los tamaños de letra son los de la plantilla; el precio se reduce solo si el número no cabe.
 - La referencia admite 8 cifras, se completa con ceros a la izquierda y se muestra como «Ref. 00012345».
 - El símbolo €, el texto legal y el fondo son fijos.
 - Permite crear varios carteles (nuevo, duplicar, eliminar) y moverse entre ellos.
 - Descarga el PDF del cartel actual o de todos a la vez (un cartel por página) en **DIN A3, A4 o A5**.
-- Los carteles se guardan solos en el navegador de cada usuario.
+- Cada vez que se abre la página empieza vacía, sin carteles anteriores.
 
 ## Estructura
 

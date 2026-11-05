@@ -20,7 +20,7 @@ const FIELDS = {
   '210029536': { label: 'Características técnicas', order: 2, ph: 'XXX XXXX' },
   '210639376': { label: 'Precio · euros', order: 3, price: 'int', ph: 'XX' },
   '210018208': { label: 'Precio · céntimos', order: 4, price: 'dec', ph: '‘XX' },
-  '211134976': { label: 'Precio por unidad', order: 5, ph: 'XXX' },
+  '211134976': { label: 'Unidad de medida', order: 5, ph: 'XXX', inPrice: true },
   '211129312': { label: 'Referencia', order: 6, ph: 'Ref. XXXXXXXX', ref: true, allcaps: false }
 };
 // Desplazamiento vertical (pt) de algunos elementos respecto a la plantilla original:
@@ -221,8 +221,10 @@ function drawField(f) {
 
 // ---------- panel de textos ----------
 function renderCards() {
-  const C = $('#cards'); C.innerHTML = '';
+  // Euros y céntimos se rellenan solo desde «2 · Precio»; el precio por unidad también va en ese apartado
+  const C = $('#cards'), CP = $('#cardsPrice'); C.innerHTML = ''; CP.innerHTML = '';
   for (const f of S.edit) {
+    if (f.price) continue;
     let ta;
     if (f.ref) {
       ta = el('input', { id: 'ta-' + f.id, type: 'text', inputmode: 'numeric', maxlength: 8, autocomplete: 'off', placeholder: '8 dígitos, ej. 12345678', class: 'refin' });
@@ -237,7 +239,7 @@ function renderCards() {
     const card = el('div', { class: 'field' + (S.sel === f ? ' sel' : ''), id: 'card-' + f.id },
       el('div', { class: 'head' }, el('label', { class: 'name', for: 'ta-' + f.id, text: f.label })), ta);
     if (f.ref) card.append(el('p', { class: 'note', style: 'margin:0', text: 'Si tiene menos de 8 cifras se completa con ceros a la izquierda. En el cartel aparece como “Ref. 00012345”.' }));
-    f.card = card; C.append(card);
+    f.card = card; (f.inPrice ? CP : C).append(card);
   }
 }
 let navT;
@@ -298,8 +300,8 @@ $('#zoom').addEventListener('input', e => { S.zoom = +e.target.value; applyZoom(
 window.addEventListener('resize', applyZoom);
 
 // ---------- guardado en el navegador ----------
-let saveT;
-function saveDraft() { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(STORE_KEY, JSON.stringify({ carteles: S.carteles, cur: S.cur, size: $('#pdfSize').value })); } catch (_) {} }, 400); }
+// Cada vez que se abre la página se empieza de cero: no se guardan carteles entre visitas.
+function saveDraft() {}
 $('#pdfSize').onchange = saveDraft;
 
 // ---------- PDF ----------
@@ -351,9 +353,8 @@ $('#btnPdfAll').onclick = e => { const b = e.currentTarget; busy(() => makePdf(S
 (async () => {
   try {
     await loadTemplate(await getTemplateText());
-    let draft = null; try { draft = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (_) {}
-    if (draft?.carteles?.length) { S.carteles = draft.carteles; S.cur = Math.min(draft.cur || 0, draft.carteles.length - 1); if (PAPER[draft.size]) $('#pdfSize').value = draft.size; }
-    else S.carteles = [{ values: blankValues() }];
+    try { localStorage.removeItem(STORE_KEY); localStorage.removeItem('cartel-editor-v1'); localStorage.removeItem('cartel-editor-v2'); } catch (_) {} // borra carteles de versiones anteriores
+    S.carteles = [{ values: blankValues() }];
     // Carteles guardados con los textos de ejemplo antiguos: se vacían para que muestren XXX
     for (const c of S.carteles) for (const f of S.edit) { const v = c.values[f.id]; if (v && JSON.stringify(v.paras) === JSON.stringify(f.tplParas)) v.paras = ['']; if (v && f.ref) v.paras = [v.paras.join('').replace(/\D/g, '').slice(-8)]; }
     applyValues(curValues());
