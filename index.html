@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Generador de carteles de precio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,800&family=Permanent+Marker&display=swap">
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+<!--CONTENIDO-->
+<header class="cab">
+  <div class="cab-in">
+    <div>
+      <h1>Generador de carteles de precio</h1>
+      <p>Escribe los textos de cada cartel y descárgalos en PDF.</p>
+    </div>
+    <span class="logo"><img src="assets/img/logo-bigmat.png" alt="BigMat · La tienda profesional de la construcción" width="97" height="38"></span>
+  </div>
+</header>
+
+<div class="wrap">
+  <aside class="col">
+    <section class="card">
+      <h2 class="tab">1 · Carteles</h2>
+      <div class="stack">
+        <button class="btn" id="btnNew" type="button">Nuevo cartel</button>
+        <button class="btn" id="btnDup" type="button">Duplicar este cartel</button>
+        <div id="delRow"><button class="btn" id="btnDel" type="button">Eliminar este cartel</button></div>
+      </div>
+    </section>
+
+    <section class="card" id="secQuick" hidden>
+      <h2 class="tab">2 · Precio</h2>
+      <label class="lbl" for="quickPrice">Precio en euros (ej. 12,99)</label>
+      <div class="price"><input id="quickPrice" inputmode="decimal" autocomplete="off"><span>€</span></div>
+      <p class="note">Rellena a la vez los euros y los céntimos del cartel.</p>
+    </section>
+
+    <section class="card">
+      <h2 class="tab">3 · Textos</h2>
+      <div id="cards" class="fields"></div>
+    </section>
+
+    <section class="card">
+      <h2 class="tab">Opciones</h2>
+      <div class="opt">
+        <label class="zoom" for="zoom">Zoom <input type="range" id="zoom" min="50" max="200" step="5" value="100"></label>
+        <label class="chk"><input type="checkbox" id="chkFrames" checked> Ver los marcos de los textos</label>
+        <div id="fonts"></div>
+      </div>
+    </section>
+  </aside>
+
+  <main class="col right">
+    <section class="card bar">
+      <div class="row">
+        <button class="btn inline arrow" id="prev" type="button" aria-label="Cartel anterior">←</button>
+        <select id="sel" aria-label="Cartel"></select>
+        <button class="btn inline arrow" id="next" type="button" aria-label="Cartel siguiente">→</button>
+      </div>
+      <div class="row">
+        <label for="pdfSize">Tamaño de papel</label>
+        <select id="pdfSize">
+          <option value="A3">DIN A3 (297 × 420 mm)</option>
+          <option value="A4" selected>DIN A4 (210 × 297 mm)</option>
+          <option value="A5">DIN A5 (148 × 210 mm)</option>
+        </select>
+        <button class="btn inline pdf" id="btnPdfOne" type="button">Descargar PDF de este cartel</button>
+        <button class="btn inline pdf" id="btnPdfAll" type="button">Descargar PDF de todos</button>
+      </div>
+      <p class="note">El PDF se genera con el tamaño de papel elegido y un cartel por página.</p>
+    </section>
+    <section class="card preview" id="desk">
+      <div class="sheetwrap" id="sheetwrap"><div class="poster frames" id="poster"></div></div>
+      <p class="note" id="loading">Cargando plantilla…</p>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" hidden></div>
+<input type="file" id="fileFont" hidden accept=".ttf,.otf,.woff,.woff2">
+<!--/CONTENIDO-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
