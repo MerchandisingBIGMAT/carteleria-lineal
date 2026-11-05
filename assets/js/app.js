@@ -18,10 +18,10 @@ const SUP = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵
 const FIELDS = {
   '210023872': { label: 'Descripción del producto', order: 1, ph: 'XXX XXXX' },
   '210029536': { label: 'Características técnicas', order: 2, ph: 'XXX XXXX' },
-  '210639376': { label: 'Precio · euros', order: 3, sizable: true, price: 'int', ph: 'XX' },
-  '210018208': { label: 'Precio · céntimos', order: 4, sizable: true, price: 'dec', ph: '‘XX' },
-  '211134976': { label: 'Precio por unidad', order: 5, ph: 'XXX €/M²/L./KG.' },
-  '211129312': { label: 'Referencia', order: 6, ph: '(REF.XXXXXXXXX)' }
+  '210639376': { label: 'Precio · euros', order: 3, price: 'int', ph: 'XX' },
+  '210018208': { label: 'Precio · céntimos', order: 4, price: 'dec', ph: '‘XX' },
+  '211134976': { label: 'Precio por unidad', order: 5, ph: 'XXX' },
+  '211129312': { label: 'Referencia', order: 6, ph: 'Ref. XXXXXXXX', ref: true, allcaps: false }
 };
 // Desplazamiento vertical (pt) de algunos elementos respecto a la plantilla original:
 // el precio por unidad y su recuadro negro bajan para no chocar con el símbolo €.
@@ -134,7 +134,7 @@ function parseText(base, o) {
 // ---------- carteles ----------
 const blankValues = () => Object.fromEntries(S.edit.map(f => [f.id, JSON.parse(JSON.stringify(f.orig))]));
 const curValues = () => S.carteles[S.cur].values;
-function applyValues(v) { for (const f of S.edit) { const x = v[f.id] || f.orig; f.paras = [...x.paras]; f.size = x.size; f.ls = x.ls; } }
+function applyValues(v) { for (const f of S.edit) { const x = v[f.id] || f.orig; f.paras = [...x.paras]; f.size = f.orig.size; f.ls = f.orig.ls; } }
 function storeField(f) { curValues()[f.id] = { paras: [...f.paras], size: f.size, ls: f.ls }; }
 function cartelTitle(c) { const d = c.values['210023872']?.paras.filter(Boolean).join(' ').trim(); return d || 'Sin descripción'; }
 function cartelPrice(c) { if (!S.intField || !S.decField) return ''; const i = c.values[S.intField.id]?.paras.join('').trim(), d = c.values[S.decField.id]?.paras.join('').replace(/^\D*/, ''); return i ? `${i}${d ? ',' + d : ''} €` : ''; }
@@ -195,7 +195,13 @@ function lineMetrics(f) {
   if (!asc) { asc = f.size * 0.9; desc = f.size * 0.22; }
   return { asc, desc };
 }
+// El usuario no cambia tamaños: el precio se reduce solo si el número no cabe en su cuadro.
 function updateFieldEl(f) {
+  if (!f.price) return drawField(f);
+  f.size = f.orig.size; f.ls = f.orig.ls; shrinkToFit(f);
+}
+const refText = f => { const d = f.paras.join('').replace(/\D/g, '').slice(-8); return d ? 'Ref. ' + d.padStart(8, '0') : ''; };
+function drawField(f) {
   const d = f.el; if (!d) return;
   const fi = fontInfo(f.font), { asc, desc } = lineMetrics(f);
   // Interlineado fijo de Scribus: la primera línea apoya su base a la altura del ascendente
@@ -205,11 +211,11 @@ function updateFieldEl(f) {
   d.style.justifyContent = ['flex-start', 'center', 'flex-end'][f.valign] || 'flex-start';
   const T = d.firstChild;
   T.style.cssText = `top:${shift}px;font-family:${fontStack(f.font)};font-weight:${fi.weight};font-style:${fi.style};font-size:${f.size}px;line-height:${L}px;color:${f.color};text-transform:${f.allcaps ? 'uppercase' : 'none'};text-align:${['left', 'center', 'right', 'justify', 'justify'][f.align] || 'left'}`;
-  const isPh = f.editable && !f.paras.join('').trim(), shown = isPh ? [f.ph] : f.paras;
+  const isPh = f.editable && !(f.ref ? refText(f) : f.paras.join('').trim()), shown = isPh ? [f.ph] : f.ref ? [refText(f)] : f.paras;
   T.replaceChildren(...shown.map((p, i) => { const pe = el('div', { class: 'p' }); pe.textContent = p || '\u200b'; if (isPh) pe.style.whiteSpace = 'nowrap'; if (i > 0 && f.vor) pe.style.marginTop = f.vor + 'px'; return pe; }));
   // El texto de relleno (XXX) se reduce para que quepa en una línea, solo en pantalla y PDF
   if (isPh && T.scrollWidth > T.clientWidth + 1) T.style.fontSize = (f.size * T.clientWidth / T.scrollWidth * 0.98) + 'px';
-  const over = f.editable && !isPh && ((T.scrollHeight + shift - L * 0.4 > f.h - f.ins.t - f.ins.b + 1) || (T.scrollWidth > T.clientWidth + 1));
+  const over = f.editable && !isPh && ((T.scrollHeight + shift - L * 0.4 > f.h - f.ins.t - f.ins.b + 1) || (T.scrollWidth > T.clientWidth + 1) || (f.price && T.offsetHeight > L * shown.length * 1.05 + 1));
   f.over = over; d.classList.toggle('over', !!over); d.classList.toggle('sel', S.sel === f);
 }
 
@@ -217,30 +223,32 @@ function updateFieldEl(f) {
 function renderCards() {
   const C = $('#cards'); C.innerHTML = '';
   for (const f of S.edit) {
-    const ta = el('textarea', { id: 'ta-' + f.id, rows: Math.max(1, f.paras.length), spellcheck: 'true', placeholder: f.ph });
-    ta.value = f.paras.join('\n');
-    ta.addEventListener('input', () => { f.paras = ta.value.split('\n'); ta.rows = Math.max(1, f.paras.length); changed(f); });
+    let ta;
+    if (f.ref) {
+      ta = el('input', { id: 'ta-' + f.id, type: 'text', inputmode: 'numeric', maxlength: 8, autocomplete: 'off', placeholder: '8 dígitos, ej. 12345678', class: 'refin' });
+      ta.value = f.paras.join('').replace(/\D/g, '');
+      ta.addEventListener('input', () => { const v = ta.value.replace(/\D/g, '').slice(0, 8); if (v !== ta.value) ta.value = v; f.paras = [v]; changed(f); });
+    } else {
+      ta = el('textarea', { id: 'ta-' + f.id, rows: Math.max(1, f.paras.length), spellcheck: 'true', placeholder: f.ph });
+      ta.value = f.paras.join('\n');
+      ta.addEventListener('input', () => { f.paras = ta.value.split('\n'); ta.rows = Math.max(1, f.paras.length); changed(f); });
+    }
     ta.addEventListener('focus', () => select(f, false));
     const card = el('div', { class: 'field' + (S.sel === f ? ' sel' : ''), id: 'card-' + f.id },
       el('div', { class: 'head' }, el('label', { class: 'name', for: 'ta-' + f.id, text: f.label })), ta);
-    if (f.sizable) {
-      const inp = el('input', { type: 'number', id: 'sz-' + f.id, step: 1, min: 4, value: r2(f.size) });
-      inp.addEventListener('input', () => { const v = parseFloat(inp.value); if (!(v >= 4)) return; const k = v / f.size; f.size = v; if (f.lsMode === 0) f.ls = r2(f.ls * k); changed(f); });
-      card.append(el('div', { class: 'size' }, el('label', { for: 'sz-' + f.id, text: 'Tamaño de fuente (pt)' }), inp,
-        el('button', { class: 'btn inline sm', type: 'button', text: 'Original', onclick: () => { f.size = f.orig.size; f.ls = f.orig.ls; inp.value = f.size; changed(f); } })));
-    }
+    if (f.ref) card.append(el('p', { class: 'note', style: 'margin:0', text: 'Si tiene menos de 8 cifras se completa con ceros a la izquierda. En el cartel aparece como “Ref. 00012345”.' }));
     f.card = card; C.append(card);
   }
 }
 let navT;
-function changed(f) { storeField(f); updateFieldEl(f); if (f.price) renderQuick(true); clearTimeout(navT); navT = setTimeout(renderNav, 300); saveDraft(); }
+function changed(f) { updateFieldEl(f); storeField(f); if (f.price) renderQuick(true); clearTimeout(navT); navT = setTimeout(renderNav, 300); saveDraft(); }
 function select(f, scroll) {
   S.sel = f;
   document.querySelectorAll('.poster .tf.sel').forEach(e => e.classList.remove('sel')); f.el?.classList.add('sel');
   document.querySelectorAll('.field.sel').forEach(e => e.classList.remove('sel')); f.card?.classList.add('sel');
-  if (scroll && f.card) { f.card.scrollIntoView({ block: 'center', behavior: 'smooth' }); f.card.querySelector('textarea').focus({ preventScroll: true }); }
+  if (scroll && f.card) { f.card.scrollIntoView({ block: 'center', behavior: 'smooth' }); f.card.querySelector('textarea, input').focus({ preventScroll: true }); }
 }
-function shrinkToFit(f) { let g = 0; updateFieldEl(f); while (f.over && f.size > 4 && g++ < 200) { f.size = r2(f.size * 0.97); if (f.lsMode === 0) f.ls = r2(f.ls * 0.97); updateFieldEl(f); } }
+function shrinkToFit(f) { let g = 0; drawField(f); while (f.over && f.size > 4 && g++ < 200) { f.size = r2(f.size * 0.97); if (f.lsMode === 0) f.ls = r2(f.ls * 0.97); drawField(f); } }
 
 function renderQuick(fromField) {
   const sec = $('#secQuick'), q = $('#quickPrice');
@@ -253,7 +261,7 @@ $('#quickPrice').addEventListener('input', e => {
   const I = S.intField, Dc = S.decField, pre = (Dc.tplParas.join('').match(/^\D*/) || [''])[0];
   if (!v) { I.paras = ['']; Dc.paras = ['']; }
   else { I.paras = [m[1] || '0']; Dc.paras = [pre + ((m[2] || '') + '00').slice(0, 2)]; }
-  [I, Dc].forEach(f => { shrinkToFit(f); storeField(f); const ta = f.card?.querySelector('textarea'); if (ta) ta.value = f.paras.join('\n'); const sz = $('#sz-' + f.id); if (sz) sz.value = r2(f.size); });
+  [I, Dc].forEach(f => { updateFieldEl(f); storeField(f); const ta = f.card?.querySelector('textarea'); if (ta) ta.value = f.paras.join('\n'); });
   clearTimeout(navT); navT = setTimeout(renderNav, 300); saveDraft();
 });
 
@@ -347,7 +355,7 @@ $('#btnPdfAll').onclick = e => { const b = e.currentTarget; busy(() => makePdf(S
     if (draft?.carteles?.length) { S.carteles = draft.carteles; S.cur = Math.min(draft.cur || 0, draft.carteles.length - 1); if (PAPER[draft.size]) $('#pdfSize').value = draft.size; }
     else S.carteles = [{ values: blankValues() }];
     // Carteles guardados con los textos de ejemplo antiguos: se vacían para que muestren XXX
-    for (const c of S.carteles) for (const f of S.edit) { const v = c.values[f.id]; if (v && JSON.stringify(v.paras) === JSON.stringify(f.tplParas)) v.paras = ['']; }
+    for (const c of S.carteles) for (const f of S.edit) { const v = c.values[f.id]; if (v && JSON.stringify(v.paras) === JSON.stringify(f.tplParas)) v.paras = ['']; if (v && f.ref) v.paras = [v.paras.join('').replace(/\D/g, '').slice(-8)]; }
     applyValues(curValues());
     $('#loading').hidden = true;
     renderPoster(); renderCards(); renderQuick(); renderNav(); renderFonts(); applyZoom();

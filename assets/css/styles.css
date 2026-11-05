@@ -67,6 +67,7 @@ select { border: 1px solid var(--borde); border-radius: 4px; padding: 7px 10px; 
 .field { display: flex; flex-direction: column; gap: 6px; scroll-margin: 12px; }
 .field .head { display: flex; align-items: center; gap: 8px; }
 .field label.name { font-weight: 700; font-size: 13px; flex: 1; }
+.field .refin { width: 100%; border: 1px solid var(--borde); border-radius: 4px; padding: 7px 9px; font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: .08em; }
 .field textarea { width: 100%; resize: vertical; border: 1px solid var(--borde); border-radius: 4px; padding: 7px 9px; min-height: 38px; font-size: 14px; background: #fff; }
 .field.sel textarea { border-color: var(--azul); box-shadow: 0 0 0 2px rgba(0, 65, 138, .18); }
 .size { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
