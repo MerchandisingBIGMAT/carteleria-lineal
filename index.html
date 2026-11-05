@@ -35,7 +35,7 @@
     <section class="card" id="secQuick" hidden>
       <h2 class="tab">2 · Precio</h2>
       <label class="lbl" for="quickPrice">Precio en euros (ej. 12,99)</label>
-      <div class="price"><input id="quickPrice" inputmode="decimal" autocomplete="off"><span>€</span></div>
+      <div class="price"><input id="quickPrice" inputmode="decimal" autocomplete="off" placeholder="XX,XX"><span>€</span></div>
       <p class="note">Rellena a la vez los euros y los céntimos del cartel.</p>
     </section>
 
@@ -48,7 +48,6 @@
       <h2 class="tab">Opciones</h2>
       <div class="opt">
         <label class="zoom" for="zoom">Zoom <input type="range" id="zoom" min="50" max="200" step="5" value="100"></label>
-        <label class="chk"><input type="checkbox" id="chkFrames" checked> Ver los marcos de los textos</label>
         <div id="fonts"></div>
       </div>
     </section>
@@ -74,7 +73,7 @@
       <p class="note">El PDF se genera con el tamaño de papel elegido y un cartel por página.</p>
     </section>
     <section class="card preview" id="desk">
-      <div class="sheetwrap" id="sheetwrap"><div class="poster frames" id="poster"></div></div>
+      <div class="sheetwrap" id="sheetwrap"><div class="poster" id="poster"></div></div>
       <p class="note" id="loading">Cargando plantilla…</p>
     </section>
   </main>

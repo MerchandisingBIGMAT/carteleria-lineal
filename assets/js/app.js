@@ -14,14 +14,18 @@ const r2 = n => Math.round(n * 100) / 100;
 const SUP = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
 // Cuadros editables de la plantilla (por ItemID de Scribus).
 // El símbolo €, el texto legal y el cuadro vacío quedan fijos y no aparecen aquí.
+// "ph" es el texto de relleno que se ve mientras el campo está vacío.
 const FIELDS = {
-  '210023872': { label: 'Descripción del producto', order: 1 },
-  '210029536': { label: 'Características técnicas', order: 2 },
-  '210639376': { label: 'Precio · euros', order: 3, sizable: true, price: 'int' },
-  '210018208': { label: 'Precio · céntimos', order: 4, sizable: true, price: 'dec' },
-  '211134976': { label: 'Precio por unidad', order: 5 },
-  '211129312': { label: 'Referencia', order: 6 }
+  '210023872': { label: 'Descripción del producto', order: 1, ph: 'XXX XXXX' },
+  '210029536': { label: 'Características técnicas', order: 2, ph: 'XXX XXXX' },
+  '210639376': { label: 'Precio · euros', order: 3, sizable: true, price: 'int', ph: 'XX' },
+  '210018208': { label: 'Precio · céntimos', order: 4, sizable: true, price: 'dec', ph: '‘XX' },
+  '211134976': { label: 'Precio por unidad', order: 5, ph: 'XXX €/M²/L./KG.' },
+  '211129312': { label: 'Referencia', order: 6, ph: '(REF.XXXXXXXXX)' }
 };
+// Desplazamiento vertical (pt) de algunos elementos respecto a la plantilla original:
+// el precio por unidad y su recuadro negro bajan para no chocar con el símbolo €.
+const MOVE_Y = { '211134976': 14, '244128320': 14, '211123648': 14 };
 const PAPER = { A3: [841.89, 1190.55], A4: [595.28, 841.89], A5: [419.53, 595.28] };
 const STORE_KEY = 'carteles-precio-v1';
 
@@ -75,7 +79,7 @@ async function loadTemplate(text) {
   const jobs = [];
   const walk = (o, x, y) => {
     const a = n => o.getAttribute(n), t = a('PTYPE');
-    const base = { id: a('ItemID'), x, y, w: num(a('WIDTH')), h: num(a('HEIGHT')), rot: num(a('ROT')), fill: a('PCOLOR') && a('PCOLOR') !== 'None' ? a('PCOLOR') : null };
+    const base = { id: a('ItemID'), x, y: y + (MOVE_Y[a('ItemID')] || 0), w: num(a('WIDTH')), h: num(a('HEIGHT')), rot: num(a('ROT')), fill: a('PCOLOR') && a('PCOLOR') !== 'None' ? a('PCOLOR') : null };
     if (t === '12') { for (const ch of o.children) if (ch.tagName === 'PAGEOBJECT') walk(ch, x + num(ch.getAttribute('gXpos')), y + num(ch.getAttribute('gYpos'))); return; }
     if (t === '4') { const f = parseText(base, o); S.items.push(f); S.fields.push(f); return; }
     if (t === '2') {
@@ -88,7 +92,8 @@ async function loadTemplate(text) {
   for (const o of D.children) if (o.tagName === 'PAGEOBJECT' && num(o.getAttribute('OwnPage'), -1) === 0) walk(o, num(o.getAttribute('XPOS')) - S.page.x, num(o.getAttribute('YPOS')) - S.page.y);
   await Promise.all(jobs);
   S.edit = S.fields.filter(f => FIELDS[f.id]).sort((p, q) => FIELDS[p.id].order - FIELDS[q.id].order);
-  S.edit.forEach(f => Object.assign(f, FIELDS[f.id], { editable: true }));
+  // Los campos editables empiezan vacíos y muestran su texto de relleno (XXX)
+  S.edit.forEach(f => { Object.assign(f, FIELDS[f.id], { editable: true }); f.tplParas = [...f.orig.paras]; f.orig.paras = ['']; f.paras = ['']; });
   S.intField = S.edit.find(f => f.price === 'int'); S.decField = S.edit.find(f => f.price === 'dec');
   for (const fam of new Set(S.fields.map(f => fontInfo(f.font).family))) if (!fontAvailable(fam) && !/arial|helvetica/i.test(fam)) S.fontSubs[fam] = 'Permanent Marker';
 }
@@ -200,29 +205,30 @@ function updateFieldEl(f) {
   d.style.justifyContent = ['flex-start', 'center', 'flex-end'][f.valign] || 'flex-start';
   const T = d.firstChild;
   T.style.cssText = `top:${shift}px;font-family:${fontStack(f.font)};font-weight:${fi.weight};font-style:${fi.style};font-size:${f.size}px;line-height:${L}px;color:${f.color};text-transform:${f.allcaps ? 'uppercase' : 'none'};text-align:${['left', 'center', 'right', 'justify', 'justify'][f.align] || 'left'}`;
-  T.replaceChildren(...f.paras.map((p, i) => { const pe = el('div', { class: 'p' }); pe.textContent = p || '​'; if (i > 0 && f.vor) pe.style.marginTop = f.vor + 'px'; return pe; }));
-  const over = f.editable && ((T.scrollHeight + shift - L * 0.4 > f.h - f.ins.t - f.ins.b + 1) || (T.scrollWidth > T.clientWidth + 1));
+  const isPh = f.editable && !f.paras.join('').trim(), shown = isPh ? [f.ph] : f.paras;
+  T.replaceChildren(...shown.map((p, i) => { const pe = el('div', { class: 'p' }); pe.textContent = p || '\u200b'; if (isPh) pe.style.whiteSpace = 'nowrap'; if (i > 0 && f.vor) pe.style.marginTop = f.vor + 'px'; return pe; }));
+  // El texto de relleno (XXX) se reduce para que quepa en una línea, solo en pantalla y PDF
+  if (isPh && T.scrollWidth > T.clientWidth + 1) T.style.fontSize = (f.size * T.clientWidth / T.scrollWidth * 0.98) + 'px';
+  const over = f.editable && !isPh && ((T.scrollHeight + shift - L * 0.4 > f.h - f.ins.t - f.ins.b + 1) || (T.scrollWidth > T.clientWidth + 1));
   f.over = over; d.classList.toggle('over', !!over); d.classList.toggle('sel', S.sel === f);
-  if (f.card) f.card.querySelector('.chip').hidden = !over;
 }
 
 // ---------- panel de textos ----------
 function renderCards() {
   const C = $('#cards'); C.innerHTML = '';
   for (const f of S.edit) {
-    const ta = el('textarea', { id: 'ta-' + f.id, rows: Math.max(1, f.paras.length), spellcheck: 'true' });
+    const ta = el('textarea', { id: 'ta-' + f.id, rows: Math.max(1, f.paras.length), spellcheck: 'true', placeholder: f.ph });
     ta.value = f.paras.join('\n');
     ta.addEventListener('input', () => { f.paras = ta.value.split('\n'); ta.rows = Math.max(1, f.paras.length); changed(f); });
     ta.addEventListener('focus', () => select(f, false));
     const card = el('div', { class: 'field' + (S.sel === f ? ' sel' : ''), id: 'card-' + f.id },
-      el('div', { class: 'head' }, el('label', { class: 'name', for: 'ta-' + f.id, text: f.label }), el('span', { class: 'chip', text: 'No cabe' })), ta);
+      el('div', { class: 'head' }, el('label', { class: 'name', for: 'ta-' + f.id, text: f.label })), ta);
     if (f.sizable) {
       const inp = el('input', { type: 'number', id: 'sz-' + f.id, step: 1, min: 4, value: r2(f.size) });
       inp.addEventListener('input', () => { const v = parseFloat(inp.value); if (!(v >= 4)) return; const k = v / f.size; f.size = v; if (f.lsMode === 0) f.ls = r2(f.ls * k); changed(f); });
       card.append(el('div', { class: 'size' }, el('label', { for: 'sz-' + f.id, text: 'Tamaño de fuente (pt)' }), inp,
         el('button', { class: 'btn inline sm', type: 'button', text: 'Original', onclick: () => { f.size = f.orig.size; f.ls = f.orig.ls; inp.value = f.size; changed(f); } })));
     }
-    card.querySelector('.chip').hidden = !f.over;
     f.card = card; C.append(card);
   }
 }
@@ -243,9 +249,10 @@ function renderQuick(fromField) {
   if (!fromField || document.activeElement !== q) q.value = S.intField.paras.join('').trim() + (dec ? ',' + dec : '');
 }
 $('#quickPrice').addEventListener('input', e => {
-  const m = e.target.value.trim().match(/^(\d*)(?:[.,'‘’](\d*))?$/); if (!m) return;
-  const I = S.intField, Dc = S.decField, pre = (Dc.orig.paras.join('').match(/^\D*/) || [''])[0];
-  I.paras = [m[1] || '0']; Dc.paras = [pre + ((m[2] || '') + '00').slice(0, 2)];
+  const v = e.target.value.trim(), m = v.match(/^(\d*)(?:[.,'‘’](\d*))?$/); if (!m) return;
+  const I = S.intField, Dc = S.decField, pre = (Dc.tplParas.join('').match(/^\D*/) || [''])[0];
+  if (!v) { I.paras = ['']; Dc.paras = ['']; }
+  else { I.paras = [m[1] || '0']; Dc.paras = [pre + ((m[2] || '') + '00').slice(0, 2)]; }
   [I, Dc].forEach(f => { shrinkToFit(f); storeField(f); const ta = f.card?.querySelector('textarea'); if (ta) ta.value = f.paras.join('\n'); const sz = $('#sz-' + f.id); if (sz) sz.value = r2(f.size); });
   clearTimeout(navT); navT = setTimeout(renderNav, 300); saveDraft();
 });
@@ -281,7 +288,6 @@ function applyZoom() {
 }
 $('#zoom').addEventListener('input', e => { S.zoom = +e.target.value; applyZoom(); });
 window.addEventListener('resize', applyZoom);
-$('#chkFrames').onchange = e => $('#poster').classList.toggle('frames', e.target.checked);
 
 // ---------- guardado en el navegador ----------
 let saveT;
@@ -304,7 +310,7 @@ async function saveFile(filename, blob) {
 async function renderCanvas(scale) {
   if (!window.html2canvas) throw new Error('No se cargó el generador de PDF. Recarga la página.');
   const host = el('div'); host.style.cssText = `position:fixed;left:-30000px;top:0;width:${S.page.w}px;height:${S.page.h}px;`;
-  const clone = $('#poster').cloneNode(true); clone.removeAttribute('id'); clone.classList.add('export'); clone.classList.remove('frames'); clone.style.transform = 'none';
+  const clone = $('#poster').cloneNode(true); clone.removeAttribute('id'); clone.style.transform = 'none';
   host.append(clone); document.body.append(host);
   try { return await html2canvas(clone, { scale, backgroundColor: '#ffffff', logging: false, width: S.page.w, height: S.page.h }); }
   finally { host.remove(); }
@@ -340,6 +346,8 @@ $('#btnPdfAll').onclick = e => { const b = e.currentTarget; busy(() => makePdf(S
     let draft = null; try { draft = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (_) {}
     if (draft?.carteles?.length) { S.carteles = draft.carteles; S.cur = Math.min(draft.cur || 0, draft.carteles.length - 1); if (PAPER[draft.size]) $('#pdfSize').value = draft.size; }
     else S.carteles = [{ values: blankValues() }];
+    // Carteles guardados con los textos de ejemplo antiguos: se vacían para que muestren XXX
+    for (const c of S.carteles) for (const f of S.edit) { const v = c.values[f.id]; if (v && JSON.stringify(v.paras) === JSON.stringify(f.tplParas)) v.paras = ['']; }
     applyValues(curValues());
     $('#loading').hidden = true;
     renderPoster(); renderCards(); renderQuick(); renderNav(); renderFonts(); applyZoom();
